@@ -1,0 +1,15 @@
+{
+  "mnist_dataset": {
+    "epoch": {
+      "start": 0,
+      "end": 1,
+      "step": 1
+    },
+    "batch": {
+      "start": 0,
+      "end": 10,
+      "step": 10,
+      "last": 15
+    }
+  }
+}
