@@ -5,9 +5,9 @@ Javascript library for visualizing dynamic neural networks across time.
 
 # Requirements
 
-* python
 * d3
 * http://edeno.github.io/d3-save-svg/ (If saving svg's is needed)
+* python or any other prefered way of hosting
 
 # Run example
 
