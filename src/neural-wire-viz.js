@@ -7,12 +7,14 @@ let dataSource = "";
 let htmlCache = {};
 let svgKeys = [];
 let indexAutoAdvanceStep = 1;
-let step1Limit = 23;
-let indexAutoAdvanceStep2 = 5;
+let step1Limit = 39;
+let indexAutoAdvanceStep2 = 1;
 let datasetName = 'mnist_medium';
 let autoStep = false;
 let dataPrefix = '';
 let sliderEventListener = undefined;
+
+let weightMult = false;
 
 function randomIntFromInterval(min, max) { // min and max included
   return Math.floor(Math.random() * (max - min + 1) + min);
@@ -60,9 +62,10 @@ function genNeuronPositionsForBlock(network, blockIndex, totalLayers, width, hei
   let stepY = (height - (borderY *2)) / network.maxNeurons;
   let block = network.blocks[blockIndex];
 
-console.log("border x ", borderX, " bordery ", borderY)
+console.log("border x ", borderX, " bordery ", borderY, " network ", network, block.layers)
   return [...Array(block.size).keys()].map((layerIndex) => {
     let layer = block.layers[layerIndex];
+    console.log("LayerI ", layerIndex, " layer ", layer, " block lay ", block)
     let totalNeurons = layer.size;
     let startY = (height / 2.0) - (totalNeurons / 2) * stepY;
     return [...Array(layer.size).keys()].map((neuronIndex) => {
@@ -70,7 +73,7 @@ console.log("border x ", borderX, " bordery ", borderY)
       // layerIndex < (block.size-1)
       let offset = layerIndex > 0  ? randomIntFromInterval(-xRandomRange, xRandomRange) : 0 ;
       let xPos = startX + stepX * (layerIndex+ layerOffset) + offset;
-      return {x: Math.min(xPos, width - borderX), y: Math.min(height-borderY, Math.max(borderY, startY + stepY * neuronIndex)), degree: 1}
+      return {x: Math.min(xPos, width - borderX), y: Math.min(height-borderY, Math.max(borderY, startY + stepY * neuronIndex)), layerIndex: layerIndex}
     });
   })
 }
@@ -116,35 +119,67 @@ function generateLinkData(data, nodes, networkFilter = null) {
   //     return
   //   });
   // }
+  let maxWeight = Number.MIN_VALUE;
+  let minWeight = Number.MAX_VALUE;
 
-  return data.edges.filter(({source: src, target: dest}) => {
-    let srcData = parseId(src);
-    let destData = parseId(dest);
+  let maxPerLayer = [...Array(nodes.length-1).keys()].map(x => Number.MIN_VALUE);
+  let minPerLayer = [...Array(nodes.length-1).keys()].map(x => Number.MAX_VALUE);
+  return { 
+    links: 
+      data.edges.filter(({source: src, target: dest}) => {
+          let srcData = parseId(src);
+          let destData = parseId(dest);
 
-    // return renderBlocks.has(srcData.blockIndex)
-    //   && renderBlocks.has(destData.blockIndex);
-    // srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex
-    let k = srcData.blockIndex === destData.blockIndex && srcData.layerIndex === destData.layerIndex;
+          // return renderBlocks.has(srcData.blockIndex)
+          //   && renderBlocks.has(destData.blockIndex);
+          // srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex
+          let k = srcData.blockIndex === destData.blockIndex && srcData.layerIndex === destData.layerIndex;
 
 
-    return true;
-    // (srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex)
-    // || (srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex2)); //&& destData.layerIndex === 0)
+          return true;
+          // (srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex)
+          // || (srcData.blockIndex === blockIndex && destData.blockIndex === blockIndex2)); //&& destData.layerIndex === 0)
 
-  }).map(({source: src, target: dest, weight}) => {
-    let srcData = parseId(src);
-    let destData = parseId(dest);
-    // if (destData.blockIndex === blockIndex2) {
-    //   destData.layerIndex = network.blocks[srcData.blockIndex].size + destData.layerIndex
-    // }
+        }).map(({source: src, target: dest, weight, weight_magnitude}) => {
+          let srcData = parseId(src);
+          let destData = parseId(dest);
+          let floatWeight = Math.abs(parseFloat(weight));
+          let floatAbsWeightValue = Math.abs(parseFloat(weight_magnitude));
 
-    return {
-      source: nodes[srcData.layerIndex][srcData.neuronIndex],
-      target: nodes[destData.layerIndex][destData.neuronIndex],
-      weight: parseFloat(weight)
+          let weightCompare = weightMult ? floatWeight * floatAbsWeightValue : floatWeight;
 
-    }
-  });
+        // console.log(" weight ", weight, " mag ", weight_magnitude, "compare", weightCompare )
+
+          maxWeight = weightCompare > maxWeight ? weightCompare : maxWeight;
+          minWeight = weightCompare < minWeight ? weightCompare : minWeight;
+
+          maxPerLayer[srcData.layerIndex] = weightCompare > maxPerLayer[srcData.layerIndex] ? weightCompare : maxPerLayer[srcData.layerIndex];
+          minPerLayer[srcData.layerIndex] = weightCompare < minPerLayer[srcData.layerIndex] ? weightCompare : minPerLayer[srcData.layerIndex];
+
+        // if (destData.blockIndex === blockIndex2) {
+          //   destData.layerIndex = network.blocks[srcData.blockIndex].size + destData.layerIndex
+          // }
+          if (nodes[destData.layerIndex] === undefined) {
+            console.log(destData.layerIndex, nodes[destData.layerIndex], nodes)
+        }
+          if (!(destData.neuronIndex in nodes[destData.layerIndex])) {
+              console.log(destData.neuronIndex, nodes[destData.layerIndex])
+          }
+
+          return {
+            source: nodes[srcData.layerIndex][srcData.neuronIndex],
+            target: nodes[destData.layerIndex][destData.neuronIndex],
+            weight: weightCompare,
+            weight_magnitude: floatAbsWeightValue,
+            layer: srcData.layerIndex
+
+          }
+        }),
+     minWeight,
+     maxWeight,
+     maxPerLayer,
+     minPerLayer
+   };
 }
 
 function generateLinks(nodes, dataLinks, width, height) {
@@ -301,7 +336,8 @@ function buildNetwork(data, blockIndex = 0) {
   let startX = width * 0.05;
   let borderX = width * 0.02;
   let borderY = height * 0.06527;
-  let randomRangeX = width * 0.1612;
+  // let randomRangeX = width * 0.1612;
+  let randomRangeX = width * 0.001612;
 
   let neuronPositions = genNeuronPositionsForBlock(
     structure,
@@ -335,6 +371,8 @@ function renderNeurons(nodeData) {
 
   let svg = d3.select('#d3-svg');
   let plot = svg.append("g").attr("id", "plot");
+
+  console.log(nodeData);
 
   plot.append("g").attr("id", "neurons")
     .selectAll("circle.neuron")
@@ -382,7 +420,11 @@ function renderLinks(data, network, cacheKey) {
     height
   } = getSvgDimensions('d3-svg');
 
-  let dataLinks = generateLinkData(data, network.nodes);
+
+  let linkData = generateLinkData(data, network.nodes);
+
+  // console.log("min: ", linkData.minWeight, "max: ", linkData.maxWeight, "min: ", linkData.minPerLayer, " max:", linkData.maxPerLayer);
+  let dataLinks = linkData.links;
 
 
   let line = d3.line()
@@ -407,9 +449,11 @@ function renderLinks(data, network, cacheKey) {
     .style("fill", "none")
     .style("stroke", "#252525")
     .style("stroke-width", 0.5)
-    // .style("stroke-width", function(d) {return d.length > 0 ? d[0].weight : 1; })
-    // .style("stroke", function(d) { return d.length > 0 ? getColor(d[0].weight) : "#252525"})
-    .style("stroke-opacity", 1.0);
+    // .style("stroke-opacity", function(d) { return 0.4});
+      // .style("stroke-width", function(d) {return d.length > 0 ? d[0].weight : 1; })
+    // .style("stroke", function(d) { return d.length > 0 ? getColor(d[0].weight, linkData.minWeight, linkData.maxWeight) : "#252525"})
+    .style("stroke-opacity", function(d) {
+      return  d.length > 0 ? getOpacity(d[0].weight, linkData.minPerLayer[d[0].layerIndex], linkData.maxPerLayer[d[0].layerIndex]) : 1.0});
 
 
   layout = d3.forceSimulation()
@@ -459,6 +503,7 @@ function renderLinks(data, network, cacheKey) {
         svgKeys.push(cacheKey);
         let max = Object.keys(htmlCache).length;
         let fixedSvgSlider = document.getElementById('svg-slider');
+        console.log("max ", max - 1, " current ", currentIndex)
         fixedSvgSlider.setAttribute("max", max - 1);
         fixedSvgSlider.setAttribute("value", currentIndex);
         console.log(" curr index ", currentIndex, " prev index ", prevIndex)
@@ -470,9 +515,9 @@ function renderLinks(data, network, cacheKey) {
 
           let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(svgKeys.map(key => `${key}.svg`)));
           let dlAnchorElem = document.getElementById('downloadAnchorElem');
-          dlAnchorElem.setAttribute("href",     dataStr     );
-          dlAnchorElem.setAttribute("download", "images.json");
-          dlAnchorElem.click();
+          // dlAnchorElem.setAttribute("href",     dataStr     );
+          // dlAnchorElem.setAttribute("download", "images.json");
+          // dlAnchorElem.click();
         }
         // if (currentIndex >= jsonMetaData.length || prevIndex !== jsonMetaData.length - 1) {
         //   currentIndex = jsonMetaData.length - 1;
@@ -552,6 +597,7 @@ function setSlider() {
 
   d3.selectAll("#d3-svg > g#plot").remove();
   let network = buildNetwork(data, 0);
+  console.log("Network ")
   let sliderOut = document.getElementById('slider-output');
   renderNeurons(network);
   renderLinks(data, network, jsonMetaData[currentFilenameIndex].filename);
@@ -562,7 +608,7 @@ function setSlider() {
   slider.addEventListener("input", sliderEventListener);
 }
 
-function livePlot(dataRange) {
+function livePlot(dataRange, datasetName) {
   if ('batch' in dataRange) {
 
     let epochNumber = Math.floor(((dataRange.epoch.end - dataRange.epoch.start) / dataRange.epoch.step)) + 1;
@@ -581,26 +627,30 @@ function livePlot(dataRange) {
 
   }
   else {
+    let name = 'filename_template' in dataRange && dataRange['filename_template'] !== undefined ?  dataRange['filename_template'] : 'graph_epoch';
     jsonMetaData = ([...Array((dataRange.epoch.end - dataRange.epoch.start) / dataRange.epoch.step) + 1]).map((_, i) => {
       let eIndex = dataRange.epoch.start + i * dataRange.epoch.step;
-      return {filename: `graph_epoch_${eIndex}.json`, text: `Epoch ${eIndex}`};
+      return {filename: `${name}_${eIndex}.json`, text: `Epoch ${eIndex}`};
     });
 
     // Special case for mnist
-    jsonMetaData = (
-      [{filename: `graph_init.json`, text: `Init`}]
-        .concat([...Array(3)].map((_, i) => {
-          return {filename: `graph_epoch_${i}.json`, text: `Epoch ${i}`}
-        }))
-    ).concat(jsonMetaData)
+    // jsonMetaData = (
+    //   [{filename: `graph_init.json`, text: `Init`}]
+    //     .concat([...Array(3)].map((_, i) => {
+    //       return {filename: `graph_epoch_${i}.json`, text: `Epoch ${i}`}
+    //     }))
+    // ).concat(jsonMetaData)
   }
 
-  console.log(jsonMetaData);
+  console.log("Range:", jsonMetaData);
 
 
   d3.select('button#export').on('click', function () {
+
+    let slider = document.getElementById('epoch-slider');
+    let sliderValue = slider.value;
     let config = {
-      filename: `${dataset}_${epoch}`,
+      filename: `${datasetName}_${sliderValue}`,
     };
     console.log("svg save ", d3.select('#d3-svg').node())
     d3_save_svg.save(d3.select('#d3-svg').node(), config);
@@ -637,12 +687,14 @@ function livePlot(dataRange) {
 
 
   let sliderOut = document.getElementById('slider-output');
+  let sliderOut2 = document.getElementById('slider-output2');
   let selectedIndex = 0;
   let slider = document.getElementById('epoch-slider');
 
   let svgSlider = document.getElementById('svg-slider');
   slider.setAttribute("max", jsonMetaData.length - 1);
   sliderOut.innerHTML = jsonMetaData[selectedIndex].text;
+  sliderOut2.innerHTML = jsonMetaData[selectedIndex].text;
 
   d3.json(`${dataSource}/${jsonMetaData[0].filename}`, (data) => {
 
@@ -676,6 +728,7 @@ function livePlot(dataRange) {
     if (autoStep && svgSlider) {
       svgSlider.addEventListener("input", (e) => {
         let nameIndex = parseInt(e.target.value);
+        sliderOut2.innerHTML = jsonMetaData[nameIndex].text;
         if (nameIndex < svgKeys.length) {
           moveSvgToImageIndex(svgKeys[nameIndex]);
         }
@@ -763,7 +816,7 @@ function start(urlPrefix = '.', dataset=null) {
 
 function addEvents(urlPrefix = '.') {
 
-  console.log("Gott thing")
+  console.log("Gott thing");
 
   window.addEventListener('resize', debounce(onResize));
   dataPrefix = urlPrefix;
@@ -782,6 +835,7 @@ function addEvents(urlPrefix = '.') {
       datasetName = 'data' in urlParams && urlParams.data in datasetRanges ? urlParams.data : datasetName;
       let dataRange = datasetRanges[datasetName];
       autoStep = 'auto' in urlParams && urlParams.auto.toLowerCase();
+      weightMult = 'weight_mass' in urlParams && urlParams['weight_mass'].toLowerCase();
       let finalSvgs = 'svgs' in urlParams && urlParams.svgs.toLowerCase();
 
       let epoch = `epoch_3_batch_0`;
@@ -794,7 +848,7 @@ function addEvents(urlPrefix = '.') {
       }
       else {
         console.log("Data ", dataRange);
-        livePlot(dataRange);
+        livePlot(dataRange, datasetName);
       }
 
     }
@@ -855,8 +909,70 @@ function addEvents(urlPrefix = '.') {
 }
 
 
-function getColor(v) {
-  let k = (v < 0) ? "DarkBlue" : "DarkGreen";
+function getColor(v, minWeight, maxWeight) {
+  // let k = (v < 0) ? "DarkBlue" : "DarkGreen";
+  let norm = maxWeight - minWeight;
+  let vNorm = (v - minWeight);
+  let byteAlpha = Math.round((vNorm / norm) * 255);
+  let hexVal = byteAlpha.toString(16);
+  hexVal = hexVal.length < 2 ? `0${hexVal}` : hexVal;
+  let k = `#252525`;
+  // k = `rgba(37, 37, 37, 255)`;
+  console.log("v:", v, "vNorm", vNorm, minWeight, maxWeight, "ratio", (vNorm / norm), " norm ", norm, "bytealpha", byteAlpha, "hex", hexVal);
   return k;
 }
+
+function getOpacityMinMax(v, minWeight, maxWeight) {
+  // let k = (v < 0) ? "DarkBlue" : "DarkGreen";
+  let norm = maxWeight - minWeight;
+  let vOffset = (v - minWeight);
+  let vNorm = vOffset / norm;
+
+
+  // console.log("vNorm ", vNorm, "max ", maxWeight, " min ", minWeight, " we ", v);
+  // let byteAlpha = Math.round(vNorm * 255);
+  // let hexVal = byteAlpha.toString(16);
+  // hexVal = hexVal.length < 2 ? `0${hexVal}` : hexVal;
+  
+  // k = `rgba(37, 37, 37, 255)`;
+  // console.log("v:", v, "vOffset", vOffset, minWeight, maxWeight, "ratio", vNorm, " norm ", norm, "bytealpha", byteAlpha, "hex", hexVal);
+  // console.log("opacity", vNorm)
+  return vNorm;
+}
+
+function getOpacity(v, minWeight, maxWeight) {
+  let vNorm = v / maxWeight;
+  return vNorm;
+}
+
+function getOpacityMult(weight, mass, maxWeight) {
+  // let k = (v < 0) ? "DarkBlue" : "DarkGreen";
+  let vNorm = (weight * mass) / maxWeight;
+  // let byteAlpha = Math.round(vNorm * 255);
+  // let hexVal = byteAlpha.toString(16);
+  // hexVal = hexVal.length < 2 ? `0${hexVal}` : hexVal;
+
+  // k = `rgba(37, 37, 37, 255)`;
+  // console.log("v:", v, "vOffset", vOffset, minWeight, maxWeight, "ratio", vNorm, " norm ", norm, "bytealpha", byteAlpha, "hex", hexVal);
+  // console.log("opacity", vNorm)
+  return vNorm;
+}
+
+function getOpacityMultMinMax(weight, mass, minWeight, maxWeight) {
+  // let k = (v < 0) ? "DarkBlue" : "DarkGreen";
+  let v = weight * mass;
+  let norm = maxWeight - minWeight;
+  let vOffset = (v - minWeight);
+  let vNorm = vOffset / norm;
+  // console.log("vNorm ", vNorm);
+  // let byteAlpha = Math.round(vNorm * 255);
+  // let hexVal = byteAlpha.toString(16);
+  // hexVal = hexVal.length < 2 ? `0${hexVal}` : hexVal;
+
+  // k = `rgba(37, 37, 37, 255)`;
+  // console.log("v:", v, "vOffset", vOffset, minWeight, maxWeight, "ratio", vNorm, " norm ", norm, "bytealpha", byteAlpha, "hex", hexVal);
+  // console.log("opacity", vNorm)
+  return vNorm;
+}
+
 

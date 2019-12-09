@@ -15,19 +15,39 @@
 <body >
 
 <div>
-    <svg width="100%" height="55vmin" style="min-height: 300px;" id="d3-svg" onload="start('example-data', 'mnist_dataset')"></svg>
+    <svg width="100%" height="90vmin" style="min-height: 300px;" id="d3-svg" onload="start('example-data', 'mnist_dataset')"></svg>
     <div class="contols">
         <div id="error"></div>
-        <div class="slider-container">
-            <div class="slider">
-                <input id="epoch-slider" value="0" type="range" min="0" max="100"/>
+
+        <div class="slider-outer">
+            <div class="output-container">
+                <p id="slider-output" class="slider-text">0</p>
+            </div>
+            <div class="slider-container">
+                <div class="slider">
+
+                    <input id="epoch-slider" value="0" type="range" min="0" max="100"/>
+                </div>
             </div>
         </div>
-        <div class="output-container">
-            <p id="slider-output" class="slider-text">0</p>
-        </div>
+
     </div>
     <button id="export">Save as SVG</button>
+
+    <svg width="100%" height="90vmin" style="min-height: 300px;" id="svg-2" ></svg>
+    <div class="output-container">
+        <p id="slider-output2" class="slider-text">0</p>
+    </div>
+    <div class="contols">
+
+        <div class="slider-container">
+            <div class="slider">
+
+                <input id="svg-slider" value="0" type="range" min="0" max="100"/>
+            </div>
+        </div>
+
+    </div>
 </div>
 
 

@@ -11,5 +11,69 @@
       "step": 10,
       "last": 15
     }
+  },
+  "vivek": {
+    "filename_template": "epoch",
+    "epoch": {
+      "start": 0,
+      "end": 1,
+      "step": 1
+    }
+  },
+  "all": {
+    "filename_template": "epoch",
+    "epoch": {
+      "start": 0,
+      "end": 32,
+      "step": 1
+    }
+  },
+  "all-2": {
+    "filename_template": "epoch",
+    "epoch": {
+      "start": 0,
+      "end": 39,
+      "step": 1
+    }
+  },
+  "all-3": {
+    "epoch": {
+      "start": 0,
+      "end": 3,
+      "step": 1
+    },
+    "batch": {
+      "start": 0,
+      "end": 80,
+      "step": 20,
+      "last": 20
+    }
+  },
+  "all-weight-value": {
+    "epoch": {
+      "start": 0,
+      "end": 27,
+      "step": 1
+    },
+    "batch": {
+      "start": 0,
+      "end": 80,
+      "step": 20,
+      "last": 60
+    }
+  },
+  "all-epoch-1": {
+    "epoch": {
+      "start": 0,
+      "end": 1,
+      "step": 1
+    },
+    "batch": {
+      "start": 0,
+      "end": 117,
+      "step": 1,
+      "last": 1
+    }
   }
+
 }

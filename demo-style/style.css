@@ -142,3 +142,8 @@ input[type=range]:focus::-ms-fill-upper {
     top: 50%;
     left: 30%;
 }
+
+.output-container {
+    display: flex;
+    justify-content: center;
+}
